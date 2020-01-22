@@ -324,7 +324,9 @@ class SaleOrder(models.Model):
                 for newline in newlines:
                     if newline.deadline_check():
                         newline.page_qty_check_create()
-        return super(SaleOrder, self.with_context(no_checks=True)).action_confirm()
+        #@by Sushma: context no_checks always by pass order comparision with verify_discount_setting & verify_order_setting
+        # return super(SaleOrder, self.with_context(no_checks=True)).action_confirm()
+        return super(SaleOrder, self).action_confirm()
 
     @api.model
     def create(self, vals):
@@ -344,9 +346,11 @@ class SaleOrder(models.Model):
             user = self.env['res.users'].browse(self.env.uid)
             if not user.has_group('sale_advertising_order.group_no_discount_check') \
                and self.ver_tr_exc:
-                    raise UserError(_(
-                    'You cannot save a Sale Order with a line more than 60% discount. You\'ll have to cancel the order and '
-                    'resubmit it or ask Sales Support for help'))
+                raise UserError(_(
+                    'You cannot save a Sale Order with a line more than %s%s discount or order total amount is more than %s.'
+                    '\nYou\'ll have to cancel the order and '
+                    'resubmit it or ask Sales Support for help.') % (
+                                order.company_id.verify_discount_setting, '%', order.company_id.verify_order_setting))
             olines = []
             for line in order.order_line:
                 if line.multi_line:
@@ -408,6 +412,8 @@ class SaleOrderLine(models.Model):
                     comp_discount = round((1.0 - float(subtotal_bad) / (float(price_unit) * float(qty) + float(csa) *
                                                                         float(qty))) * 100.0, 5)
                     unit_price = round((float(price_unit) + float(csa)) * (1 - float(comp_discount) / 100), 5)
+                    decimals=self.env['decimal.precision'].search([('name','=','Product Price')]).digits or 4
+                    unit_price = round((float(price_unit) + float(csa)) * (1 - float(comp_discount) / 100), decimals)
                 elif qty == 0.0:
                     unit_price = 0.0
                     comp_discount = 0.0
